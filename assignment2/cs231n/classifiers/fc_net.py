@@ -260,28 +260,15 @@ class FullyConnectedNet(object):
         # layer, etc.                                                              #
         ############################################################################
         a_hidden, cache_hidden, cache_dropout = [None] * (self.num_layers - 1), [None] * (self.num_layers - 1), [None] * (self.num_layers - 1)
-
-        if self.use_batchnorm:            
-            a_hidden[0], cache_hidden[0] = self.affine_batchnorm_relu_forward(X, self.params['W1'], self.params['b1'],self.bn_params[0])
+        forward = self.affine_batchnorm_relu_forward if self.use_batchnorm else affine_relu_forward
+        backward = self.affine_batchnorm_relu_backward if self.use_batchnorm else affine_relu_backward
+        
+        for i in range(0, self.num_layers - 1):
+            a_hidden[i], cache_hidden[i] = forward(a_hidden[i - 1], self.params['W%d' % (i + 1)],
+                self.params['b%d' % (i + 1)], self.bn_params[i])
             if self.use_dropout:
-                a_hidden[0], cache_dropout[0] = dropout_forward(a_hidden[0], self.dropout_param)
-
-            for i in range(1, self.num_layers - 1):
-                a_hidden[i], cache_hidden[i] = self.affine_batchnorm_relu_forward(a_hidden[i - 1],
-                                                               self.params['W%d' % (i + 1)],
-                                                               self.params['b%d' % (i + 1)], self.bn_params[i])
-                if self.use_dropout:
-                    a_hidden[i], cache_dropout[i] = dropout_forward(a_hidden[0], self.dropout_param)
-        else:        
-            a_hidden[0], cache_hidden[0] = affine_relu_forward(X, self.params['W1'], self.params['b1'])
-            if self.use_dropout:
-                a_hidden[0], cache_dropout[0] = dropout_forward(a_hidden[0], self.dropout_param)
-            for i in range(1, self.num_layers - 1):
-                a_hidden[i], cache_hidden[i] = affine_relu_forward(a_hidden[i - 1],
-                                                               self.params['W%d' % (i + 1)],
-                                                               self.params['b%d' % (i + 1)])
-                if self.use_dropout:
-                    a_hidden[i], cache_dropout[i] = dropout_forward(a_hidden[i], self.dropout_param)
+                a_hidden[i], cache_dropout[i] = dropout_forward(a_hidden[i], self.dropout_param)
+        
         scores, cache_score = affine_forward(a_hidden[self.num_layers - 2], self.params['W%d' % self.num_layers], self.params['b%d' % self.num_layers])
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -305,22 +292,21 @@ class FullyConnectedNet(object):
         # automated tests, make sure that your L2 regularization includes a factor #
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
+        # calculate loss
         data_loss, dscores = softmax_loss(scores, y)
         reg_loss = lambda x: 0.5 * self.reg * np.sum(x**2)
         for i in range(1, self.num_layers + 1):
             loss += reg_loss(self.params['W%d' % i])
         loss += data_loss
+        
         # calculate gradient
         dhidden = [None] * self.num_layers
         dhidden[self.num_layers - 1], grads['W%d' % self.num_layers], grads['b%d' % self.num_layers] = affine_backward(dscores, cache_score) 
         for i in range(self.num_layers - 2, -1, -1):
             if self.use_dropout:
                 dhidden[i + 1] = dropout_backward(dhidden[i + 1], cache_dropout[i])
-            if self.use_batchnorm:       
-                dhidden[i], grads['W%d' % (i + 1)], grads['b%d' % (i + 1)] = self.affine_batchnorm_relu_backward(dhidden[i + 1], cache_hidden[i]) 
-            else:
-                dhidden[i], grads['W%d' % (i + 1)], grads['b%d' % (i + 1)] = affine_relu_backward(dhidden[i + 1], cache_hidden[i]) 
-        
+            dhidden[i], grads['W%d' % (i + 1)], grads['b%d' % (i + 1)] = backward(dhidden[i + 1], cache_hidden[i]) 
+    
         for i in range(1, self.num_layers + 1):
             grads['W%d' % i] += self.reg * self.params['W%d' % i]
         ############################################################################
