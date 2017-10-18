@@ -231,14 +231,24 @@ def batchnorm_backward(dout, cache):
     # TODO: Implement the backward pass for batch normalization. Store the    #
     # results in the dx, dgamma, and dbeta variables.                         #
     ###########################################################################
-    
     gamma, x, sample_mean, sample_var, eps, x_ = cache
-    N = x.shape[0]
+    N, D = x.shape
 
-    dx = (1. / N) * gamma * (sample_var + eps)**(-1. / 2.) * (N * dout - np.sum(dout, axis=0)
-            - (x - sample_mean) * (sample_var + eps)**(-1.0) * np.sum(dout * (x - sample_mean), axis=0))
-    dgamma = np.sum(x_ * dout, axis=0)
     dbeta = np.sum(dout, axis=0)
+    drx = dout
+    dgamma = np.sum(x_ * drx, axis=0)
+    dx_ = drx * gamma # think
+    dm = dx_ / np.sqrt(sample_var + eps)
+    divar = np.sum(dx_ * (x - sample_mean), axis=0)
+    dsqrt_var = -divar / (sample_var + eps)
+    dvar = 0.5 * dsqrt_var / np.sqrt(sample_var + eps)
+    dsq = 1./N * np.ones((N, D)) * dvar
+    dmean_sqr = 2 * (x - sample_mean) * dsq
+    dx1 = dmean_sqr + dm
+    du = -np.sum(dmean_sqr + dm, axis=0)
+    dx2 = 1./N * np.ones((N, D)) * du
+    dx = dx1 + dx2
+
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -313,7 +323,7 @@ def dropout_forward(x, dropout_param):
         # TODO: Implement training phase forward pass for inverted dropout.   #
         # Store the dropout mask in the mask variable.                        #
         #######################################################################
-        mask = (np.random.rand(*x.shape) >= p) / (1 - p)
+        mask = (np.random.rand(*x.shape) < p) / p
         out = mask * x
         #######################################################################
         #                           END OF YOUR CODE                          #
@@ -392,8 +402,6 @@ def conv_forward_naive(x, w, b, conv_param):
     H_ = 1 + (H + 2 * pad - HH) // stride
     W_ = 1 + (W + 2 * pad - WW) // stride
     out = np.zeros((N, F, H_, W_))
-    x_pad = np.pad(x, ((0,), (0,), (pad,), (pad,)), mode='constant', constant_values=0)
-
     # for i in range(N):
     #     out_r = 0
     #     for row in range(0, W + 2 * pad - stride, stride):
@@ -455,7 +463,7 @@ def conv_backward_naive(dout, cache):
                 dx_pad[n,:,i*stride:i*stride+HH, j*stride:j*stride+WW] += np.sum(w[:,:,:,:] * dout[n,:,i,j][:,None,None,None], axis=0)
 
     dx = dx_pad[:,:,pad:-pad,pad:-pad]
-    db = np.sum(dout, axis = (0,2,3)) # think: why?
+    db = np.sum(dout, axis = (0,2,3)) # think
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################

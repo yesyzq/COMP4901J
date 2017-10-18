@@ -1,6 +1,7 @@
 from builtins import range
 from builtins import object
 import numpy as np
+import sys # delete
 
 from cs231n.layers import *
 from cs231n.layer_utils import *
@@ -259,17 +260,19 @@ class FullyConnectedNet(object):
         # self.bn_params[1] to the forward pass for the second batch normalization #
         # layer, etc.                                                              #
         ############################################################################
-        a_hidden, cache_hidden, cache_dropout = [None] * (self.num_layers - 1), [None] * (self.num_layers - 1), [None] * (self.num_layers - 1)
-        forward = self.affine_batchnorm_relu_forward if self.use_batchnorm else affine_relu_forward
-        backward = self.affine_batchnorm_relu_backward if self.use_batchnorm else affine_relu_backward
+        input_layer = X    # only need to feed into the next layer, no need to store
+        cache_hidden, cache_dropout = {}, {} # eye: use dict instead
         
         for i in range(0, self.num_layers - 1):
-            a_hidden[i], cache_hidden[i] = forward(a_hidden[i - 1], self.params['W%d' % (i + 1)],
-                self.params['b%d' % (i + 1)], self.bn_params[i])
+            if self.use_batchnorm:
+                input_layer, cache_hidden[i] = self.affine_batchnorm_relu_forward(input_layer, self.params['W%d'%(i+1)], self.params['b%d'%(i+1)], self.bn_params[i])
+            else:
+                input_layer, cache_hidden[i] = affine_relu_forward(input_layer, self.params['W%d'%(i+1)], self.params['b%d'%(i+1)])
+
             if self.use_dropout:
-                a_hidden[i], cache_dropout[i] = dropout_forward(a_hidden[i], self.dropout_param)
+                input_layer, cache_dropout[i] = dropout_forward(input_layer, self.dropout_param)
         
-        scores, cache_score = affine_forward(a_hidden[self.num_layers - 2], self.params['W%d' % self.num_layers], self.params['b%d' % self.num_layers])
+        scores, cache_score = affine_forward(input_layer, self.params['W%d'%self.num_layers], self.params['b%d'%self.num_layers])
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -292,6 +295,7 @@ class FullyConnectedNet(object):
         # automated tests, make sure that your L2 regularization includes a factor #
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
+        backward = self.affine_batchnorm_relu_backward if self.use_batchnorm else affine_relu_backward
         # calculate loss
         data_loss, dscores = softmax_loss(scores, y)
         reg_loss = lambda x: 0.5 * self.reg * np.sum(x**2)
