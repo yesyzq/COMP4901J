@@ -228,7 +228,7 @@ class FullyConnectedNet(object):
         da = relu_backward(dout, relu_cache)
         dx_, dgamma, dbeta = batchnorm_backward(da, batch_cache)
         dx, dw, db = affine_backward(dx_, fc_cache)
-        return dx, dw, db
+        return dx, dw, db, dgamma, dbeta
 
     def loss(self, X, y=None):
         """
@@ -263,7 +263,7 @@ class FullyConnectedNet(object):
         input_layer = X    # only need to feed into the next layer, no need to store
         cache_hidden, cache_dropout = {}, {} # eye: use dict instead
         
-        for i in range(0, self.num_layers - 1):
+        for i in range(self.num_layers - 1):
             if self.use_batchnorm:
                 input_layer, cache_hidden[i] = self.affine_batchnorm_relu_forward(input_layer, self.params['W%d'%(i+1)], self.params['b%d'%(i+1)], self.bn_params[i])
             else:
@@ -295,7 +295,7 @@ class FullyConnectedNet(object):
         # automated tests, make sure that your L2 regularization includes a factor #
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
-        backward = self.affine_batchnorm_relu_backward if self.use_batchnorm else affine_relu_backward
+        # backward = self.affine_batchnorm_relu_backward if self.use_batchnorm else affine_relu_backward
         # calculate loss
         data_loss, dscores = softmax_loss(scores, y)
         reg_loss = lambda x: 0.5 * self.reg * np.sum(x**2)
@@ -309,7 +309,10 @@ class FullyConnectedNet(object):
         for i in range(self.num_layers - 2, -1, -1):
             if self.use_dropout:
                 dhidden[i + 1] = dropout_backward(dhidden[i + 1], cache_dropout[i])
-            dhidden[i], grads['W%d' % (i + 1)], grads['b%d' % (i + 1)] = backward(dhidden[i + 1], cache_hidden[i]) 
+            if self.use_batchnorm:
+                dhidden[i], grads['W%d' % (i + 1)], grads['b%d' % (i + 1)], grads['gamma%d' % (i + 1)], grads['beta%d' % (i + 1)] = self.affine_batchnorm_relu_backward(dhidden[i + 1], cache_hidden[i])
+            else:
+                dhidden[i], grads['W%d' % (i + 1)], grads['b%d' % (i + 1)] = affine_relu_backward(dhidden[i + 1], cache_hidden[i])
     
         for i in range(1, self.num_layers + 1):
             grads['W%d' % i] += self.reg * self.params['W%d' % i]
