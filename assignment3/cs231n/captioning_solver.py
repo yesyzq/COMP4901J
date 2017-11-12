@@ -2,9 +2,48 @@ from __future__ import print_function, division
 from builtins import range
 from builtins import object
 import numpy as np
+import time
 
 from cs231n import optim
 from cs231n.coco_utils import sample_coco_minibatch
+import nltk
+
+
+def BLEU_score(gt_caption, sample_caption):
+    """
+    gt_caption: string, ground-truth caption
+    sample_caption: string, your model's predicted caption
+    Returns unigram BLEU score.
+    """
+    reference = [x for x in gt_caption.split(' ') 
+                 if ('<END>' not in x and '<START>' not in x and '<UNK>' not in x)]
+    hypothesis = [x for x in sample_caption.split(' ') 
+                  if ('<END>' not in x and '<START>' not in x and '<UNK>' not in x)]
+    BLEUscore = nltk.translate.bleu_score.sentence_bleu([reference], hypothesis, weights = [1])
+    return BLEUscore
+
+
+def evaluate_model(model, data):
+    """
+    model: CaptioningRNN model
+    Prints unigram BLEU score averaged over 1000 training and val examples.
+    """
+    BLEUscores = dict()
+    for split in ['train', 'val']:
+        minibatch = sample_coco_minibatch(data, split='val', batch_size=1000)
+        gt_captions, features, urls = minibatch
+        gt_captions = decode_captions(gt_captions, data['idx_to_word'])
+
+        sample_captions = model.sample(features)
+        sample_captions = decode_captions(sample_captions, data['idx_to_word'])
+
+        total_score = 0.0
+        for gt_caption, sample_caption, url in zip(gt_captions, sample_captions, urls):
+            total_score += BLEU_score(gt_caption, sample_caption)
+
+        BLEUscores[split] = total_score / len(sample_captions)
+
+    return BLEU_val_score
 
 
 class CaptioningSolver(object):
@@ -207,17 +246,21 @@ class CaptioningSolver(object):
         """
         Run optimization to train the model.
         """
-        num_train = self.data['train_captions'].shape[0]
+        num_train = self.data['train_captions'].shape[0] * 0.9
+        num_val = self.data['train_captions'].shape[0] * 0.1
         iterations_per_epoch = max(num_train // self.batch_size, 1)
         num_iterations = self.num_epochs * iterations_per_epoch
 
+        train_remaining, eta = num_train, None
         for t in range(num_iterations):
+            start_time = time.time()
             self._step()
 
             # Maybe print training loss
             if self.verbose and t % self.print_every == 0:
-                print('(Iteration %d / %d) loss: %f' % (
-                       t + 1, num_iterations, self.loss_history[-1]))
+                evaluate_model(self.model, self.data)
+                print('(Iteration %d / %d) loss: %f eta: %f' % (
+                       t + 1, num_iterations, self.loss_history[-1], eta))
 
             # At the end of every epoch, increment the epoch counter and decay the
             # learning rate.
@@ -226,6 +269,10 @@ class CaptioningSolver(object):
                 self.epoch += 1
                 for k in self.optim_configs:
                     self.optim_configs[k]['learning_rate'] *= self.lr_decay
+
+            delta_time = time.time() - start_time
+            eta = train_remaining * delta_time / batch_size
+            train_remaining -= batch_size
 
             # Check train and val accuracy on the first iteration, the last
             # iteration, and at the end of each epoch.

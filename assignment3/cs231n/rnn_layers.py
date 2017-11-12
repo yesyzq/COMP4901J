@@ -76,8 +76,6 @@ def rnn_step_backward(dnext_h, cache):
     dprev_h = dx_[:,D:]
     dx = dx_[:, :D]
     db = np.sum(da, axis=0)
-    
-
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -186,7 +184,7 @@ def word_embedding_forward(x, W):
     #                                                                            #
     # HINT: This can be done in one line using NumPy's array indexing.           #
     ##############################################################################
-    out = W[x, :]  # think
+    out = W[x, :]  # for every x, assign a D-dimension vector
     cache = x, W
     ##############################################################################
     #                               END OF YOUR CODE                             #
@@ -218,7 +216,7 @@ def word_embedding_backward(dout, cache):
     ##############################################################################
     x, W = cache
     dW = np.zeros_like(W)
-    np.add.at(dW, x, dout)  # think
+    np.add.at(dW, x, dout)  # for each dW at x location, add dout to it
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -307,11 +305,11 @@ def lstm_step_backward(dnext_h, dnext_c, cache):
     #############################################################################
     i, f, o, g, prev_c, next_c, W, X, D = cache  # here result out of sigmoid
     dnext_c += (1 - np.tanh(next_c)**2) * dnext_h * o
-    dsigo = np.tanh(next_c) * dnext_h # think
+    dsigo = np.tanh(next_c) * dnext_h
     
     dtanh_g = dnext_c * i
     dsigi = dnext_c * g
-    dsigf = dnext_c * prev_c
+    dsigf = dnext_c * prev_c 
     dprev_c = f * dnext_c
     
     dg = (1 - g**2) * dtanh_g
