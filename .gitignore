@@ -1,5 +1,10 @@
 .idea
 .ipynb_checkpoints
+
+__pycache__/
+*.py[cod]
+*$py.class
+
 tmp
 
 assignment3/cs231n/datasets
